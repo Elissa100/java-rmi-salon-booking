@@ -46,17 +46,31 @@ public class GlamourServiceImpl extends UnicastRemoteObject implements IGlamourS
         return serviceDao.save(s);
     }
 
+    public SalonService updateService(SalonService s) throws RemoteException {
+        if(s.getPrice() <= 0) throw new RemoteException("Price must be > 0");
+        return serviceDao.save(s);
+    }
+
+    public void deleteService(Integer id) throws RemoteException {
+        try { serviceDao.delete(id); }
+        catch(Exception e) { throw new RemoteException("Cannot delete! Service is linked to an appointment."); }
+    }
+
     public List<Staff> getStaff() throws RemoteException { return staffDao.findAll(); }
 
     public Staff saveStaff(Staff s) throws RemoteException { return staffDao.save(s); }
 
+    public Staff updateStaff(Staff s) throws RemoteException { return staffDao.save(s); }
+
+    public void deleteStaff(Integer id) throws RemoteException {
+        try { staffDao.delete(id); }
+        catch(Exception e) { throw new RemoteException("Cannot delete! Staff is linked to an appointment."); }
+    }
+
     public List<Appointment> getAppointments() throws RemoteException {
         List<Appointment> list = apptDao.findAll();
-        // FIX: Convert Hibernate PersistentBag to Standard Java ArrayList for RMI Client
         for(Appointment a : list) {
-            if(a.getServices() != null) {
-                a.setServices(new ArrayList<>(a.getServices()));
-            }
+            if(a.getServices() != null) a.setServices(new ArrayList<>(a.getServices()));
         }
         return list;
     }
@@ -70,14 +84,8 @@ public class GlamourServiceImpl extends UnicastRemoteObject implements IGlamourS
                 throw new RemoteException("Staff is already booked at this specific time!");
             }
         }
-
         Appointment saved = apptDao.save(a);
-
-        // FIX: Convert Hibernate PersistentBag to Standard Java ArrayList before sending back
-        if(saved.getServices() != null) {
-            saved.setServices(new ArrayList<>(saved.getServices()));
-        }
-
+        if(saved.getServices() != null) saved.setServices(new ArrayList<>(saved.getServices()));
         return saved;
     }
 }
