@@ -78,14 +78,62 @@ public class GlamourServiceImpl extends UnicastRemoteObject implements IGlamourS
     public Appointment bookAppointment(Appointment a) throws RemoteException {
         if(a.getApptDate().isEmpty()) throw new RemoteException("Date cannot be empty");
         if(a.getServices() == null || a.getServices().isEmpty()) throw new RemoteException("Select a service");
-        a.setStatus("CONFIRMED");
-        for(Appointment ex : apptDao.findAll()) {
-            if(ex.getStaff().getId().equals(a.getStaff().getId()) && ex.getApptDate().equals(a.getApptDate()) && ex.getApptTime().equals(a.getApptTime())) {
-                throw new RemoteException("Staff is already booked at this specific time!");
+
+        // convert appointment time to minutes
+        int newStart = parseTimeToMinutes(a.getApptTime());
+        if (newStart == -1) throw new RemoteException("Invalid time format. Please use HH:MM");
+
+        //calculate appointment duration
+        int duration = 0;
+        for (SalonService s : a.getServices()) {
+            duration += (s.getDurationMins() != null) ? s.getDurationMins() : 30; // default 30 mins fallback
+        }
+        int newEnd = newStart + duration;
+
+        // Check for overlaps with existing appointments on the same date for the same staff member
+        for (Appointment ex : apptDao.findAll()) {
+            if (ex.getStaff().getId().equals(a.getStaff().getId()) && ex.getApptDate().equals(a.getApptDate())) {
+                int exStart = parseTimeToMinutes(ex.getApptTime());
+                if (exStart == -1) continue;
+
+                int exDuration = 0;
+                if (ex.getServices() != null) {
+                    for (SalonService s : ex.getServices()) {
+                        exDuration += (s.getDurationMins() != null) ? s.getDurationMins() : 30;
+                    }
+                }
+                int exEnd = exStart + exDuration;
+
+                // overlap formula
+                if (newStart < exEnd && exStart < newEnd) {
+                    throw new RemoteException("Staff is already busy during this time!\n" +
+                            "They have an appointment from " + ex.getApptTime() + " to " + formatMinutesToTime(exEnd));
+                }
             }
         }
+
+        a.setStatus("CONFIRMED");
         Appointment saved = apptDao.save(a);
         if(saved.getServices() != null) saved.setServices(new ArrayList<>(saved.getServices()));
         return saved;
+    }
+
+    // turn HH:MM format to total minutes
+    private int parseTimeToMinutes(String timeStr) {
+        try {
+            String[] parts = timeStr.trim().split(":");
+            int hours = Integer.parseInt(parts[0]);
+            int minutes = Integer.parseInt(parts[1]);
+            return hours * 60 + minutes;
+        } catch (Exception e) {
+            return -1;
+        }
+    }
+
+    //convert total minutes to HH:MM format
+    private String formatMinutesToTime(int totalMinutes) {
+        int hours = totalMinutes / 60;
+        int minutes = totalMinutes % 60;
+        return String.format("%02d:%02d", hours, minutes);
     }
 }
